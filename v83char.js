@@ -59,6 +59,19 @@ V83.retarget=function(srcRoot,clip,tgtRoot,opt){
     R[n]=(a&&b)?new THREE.Quaternion().setFromUnitVectors(a,b):null;
   }
   for(const n of names){if(!R[n])R[n]=(PAR[n]&&R[PAR[n]])?R[PAR[n]].clone():new THREE.Quaternion();}
+  // 体幹と脚は「静止からの差分」だけを移す(どちらの静止も直立なので、チビの背骨の傾きや首の角度をMixamoに合わせて曲げない)
+  // 腕だけ骨の向きを合わせる(Tポーズ→Aポーズの差を吸収)
+  const DELTA=opt.delta||/^(Hips|Spine|Spine1|Spine2|Neck|Head|LeftUpLeg|RightUpLeg|LeftLeg|RightLeg|LeftFoot|RightFoot|LeftToeBase|RightToeBase)$/;
+  for(const n of names)if(DELTA.test(n))R[n].identity();
+  // 脚の開き(Aポーズのまま)を、足が腰の真下近くに来るまで閉じる(股関節で脚ごと回す・足裏は水平のまま)
+  const adjAll=Object.assign({},opt.adj||V83.ADJ_LIST);
+  for(const sd of ['Left','Right']){
+    const u=tR[sd+'UpLeg'],f=tR[sd+'Foot'];if(!u||!f)continue;
+    const a=Math.atan2(f.p.x-u.p.x,u.p.y-f.p.y); // 脚の外への傾き(+で+X側)
+    const want=(sd==='Left'?1:-1)*0.035,rot=-(a-want);
+    if(Math.abs(rot)<0.01)continue;
+    for(const b of [sd+'UpLeg',sd+'Leg'])adjAll[b]=(adjAll[b]||[]).concat([[0,0,1,rot]]);
+  }
   // 親→子の順
   const order=[];tgtRoot.traverse(o=>{if(o.isBone){const n=V83.norm(o.name);if(names.includes(n))order.push(n);}});
   const hipH=sR.Hips.p.y-Math.min(sR.LeftFoot?sR.LeftFoot.p.y:0,sR.RightFoot?sR.RightFoot.p.y:0);
@@ -79,8 +92,8 @@ V83.retarget=function(srcRoot,clip,tgtRoot,opt){
       sb.getWorldQuaternion(_q1);
       // tW = sW * inv(sRest) * inv(R) * tRest
       _q1.multiply(tmpInv.copy(sR[n].q).invert()).multiply(_q2.copy(R[n]).invert()).multiply(tR[n].q);
-      const adj=(opt.adj||V83.ADJ)[n];
-      if(adj){_q2.setFromAxisAngle(_v2.set(adj[0],adj[1],adj[2]),adj[3]);_q1.premultiply(_q2);}
+      const adjl=adjAll[n];
+      if(adjl)for(const adj of adjl){_q2.setFromAxisAngle(_v2.set(adj[0],adj[1],adj[2]),adj[3]);_q1.premultiply(_q2);}
       tb.parent.updateWorldMatrix(true,false);
       tb.parent.getWorldQuaternion(_q2);
       tb.quaternion.copy(_q2.invert().multiply(_q1));
@@ -119,7 +132,13 @@ V83.retarget=function(srcRoot,clip,tgtRoot,opt){
 };
 
 // チビ体型向けの補正(腕を少し体に寄せる・脚を少し閉じる): [軸x,y,z,角度]
-V83.ADJ={LeftArm:[0,0,1,-0.13],RightArm:[0,0,1,0.13],LeftUpLeg:[0,0,1,-0.07],RightUpLeg:[0,0,1,0.07]};
+const TW=0.9; // 前腕のひねり(手のひらを太ももに向ける)
+V83.ADJ_LIST={
+  // 腕全体を体に寄せる(肩から先を同じだけ回す=剛体で回る)
+  LeftArm:[[0,0,1,-0.12]],LeftForeArm:[[0,1,0,-TW],[0,0,1,-0.12],[1,0,0,-0.32]],LeftHand:[[0,1,0,-TW],[0,0,1,-0.12],[1,0,0,-0.32]],
+  RightArm:[[0,0,1,0.12]],RightForeArm:[[0,1,0,TW],[0,0,1,0.12],[1,0,0,-0.32]],RightHand:[[0,1,0,TW],[0,0,1,0.12],[1,0,0,-0.32]],
+};
+V83.ADJ={};
 V83.measureSpeed=function(root,clip){
   const B=V83.bones(root);const m=new THREE.AnimationMixer(root);const a=m.clipAction(clip);a.play();
   const N=60,feet=['LeftToeBase','RightToeBase'].map(n=>B[n]||B[n.replace('ToeBase','Foot')]);const rec=feet.map(()=>[]);
@@ -182,15 +201,24 @@ V83.eyePatch=function(mesh,cfg){
   const yawQ=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),-(cfg.yaw||0));
   const n=pos.count,cp=new Float32Array(n*3),v=new THREE.Vector3(),box=new THREE.Box3();
   for(let i=0;i<n;i++){v.fromBufferAttribute(pos,i).applyMatrix4(bm).applyQuaternion(yawQ);cp[i*3]=v.x;cp[i*3+1]=v.y;cp[i*3+2]=v.z;box.expandByPoint(v);}
-  const tg=new THREE.BufferGeometry();tg.setAttribute('position',new THREE.BufferAttribute(cp,3));tg.setIndex(g.index);
-  const tm=new THREE.Mesh(tg,new THREE.MeshBasicMaterial({side:THREE.DoubleSide}));tm.updateMatrixWorld(true);
   const [dx0,dy0,rx0,ry0,sc]=cfg.reg,[RW,RH]=cfg.RS;
   const d2m=(dx,dy)=>{const rx=rx0+(dx-dx0)*sc,ry=ry0+(dy-dy0)*sc;return [box.min.x+rx/RW*(box.max.x-box.min.x),box.max.y-ry/RH*(box.max.y-box.min.y)];};
   let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
   for(const p of cfg.parts){x0=Math.min(x0,p[0]-p[2]*1.25);x1=Math.max(x1,p[0]+p[2]*1.25);y0=Math.min(y0,p[1]-p[3]*1.25);y1=Math.max(y1,p[1]+p[3]*1.25);}
   const GX=28,GY=Math.max(8,Math.round(GX*(y1-y0)/(x1-x0)));
+  const UV=new Float32Array((GX+1)*(GY+1)*2);
+  for(let j=0;j<=GY;j++)for(let i=0;i<=GX;i++){const id=j*(GX+1)+i;UV[id*2]=i/GX;UV[id*2+1]=1-j/GY;}
+  let P;
+  if(cfg.patch&&cfg.patch.length===(GX+1)*(GY+1)*3){P=new Float32Array(cfg.patch);} // 事前計算済み(読み込み時のレイキャスト不要=カクつき防止)
+  else{
+  // 顔の範囲にかかる三角形だけでレイキャスト(全身4万三角を毎回なめない)
+  const [ax0,ay0]=d2m(x0,y1),[ax1,ay1]=d2m(x1,y0);const ix=g.index.array,sub=[];
+  for(let t=0;t<ix.length;t+=3){const a=ix[t]*3,b=ix[t+1]*3,c=ix[t+2]*3;
+    if(Math.max(cp[a],cp[b],cp[c])<ax0||Math.min(cp[a],cp[b],cp[c])>ax1||Math.max(cp[a+1],cp[b+1],cp[c+1])<ay0||Math.min(cp[a+1],cp[b+1],cp[c+1])>ay1)continue;sub.push(ix[t],ix[t+1],ix[t+2]);}
+  const tg=new THREE.BufferGeometry();tg.setAttribute('position',new THREE.BufferAttribute(cp,3));tg.setIndex(sub);
+  const tm=new THREE.Mesh(tg,new THREE.MeshBasicMaterial({side:THREE.DoubleSide}));tm.updateMatrixWorld(true);
   const rc=new THREE.Raycaster(),dir=new THREE.Vector3(0,0,-1),org=new THREE.Vector3();
-  const P=new Float32Array((GX+1)*(GY+1)*3),UV=new Float32Array((GX+1)*(GY+1)*2);
+  P=new Float32Array((GX+1)*(GY+1)*3);
   const zs=[];
   for(let j=0;j<=GY;j++)for(let i=0;i<=GX;i++){
     const dx=x0+(x1-x0)*i/GX,dy=y0+(y1-y0)*j/GY;const [mx,my]=d2m(dx,dy);
@@ -206,7 +234,6 @@ V83.eyePatch=function(mesh,cfg){
       }
     }
     zs.push(z);const id=j*(GX+1)+i;P[id*3]=mx;P[id*3+1]=my;P[id*3+2]=z==null?NaN:z;
-    UV[id*2]=i/GX;UV[id*2+1]=1-j/GY;
   }
   // 抜けた点は近傍の平均で埋める
   for(let it=0;it<4;it++)for(let id=0;id<zs.length;id++){if(!isNaN(P[id*3+2]))continue;let s=0,c=0;
@@ -217,11 +244,14 @@ V83.eyePatch=function(mesh,cfg){
   // キャラ空間→メッシュのジオメトリ空間へ戻す
   const inv=new THREE.Matrix4().copy(bm).invert(),iq=yawQ.clone().invert();
   for(let id=0;id<zs.length;id++){v.set(P[id*3],P[id*3+1],P[id*3+2]+(box.max.z-box.min.z)*0.004).applyQuaternion(iq).applyMatrix4(inv);P[id*3]=v.x;P[id*3+1]=v.y;P[id*3+2]=v.z;}
+  }
+  const NV=P.length/3;
+  V83.lastPatch=Array.from(P,x=>+x.toFixed(5));
   const idx=[];for(let j=0;j<GY;j++)for(let i=0;i<GX;i++){const a=j*(GX+1)+i,b=a+1,c=a+GX+1,d=c+1;idx.push(a,c,b,b,c,d);}
   const pg=new THREE.BufferGeometry();pg.setAttribute('position',new THREE.BufferAttribute(P,3));pg.setAttribute('uv',new THREE.BufferAttribute(UV,2));pg.setIndex(idx);
   pg.computeVertexNormals();
   const hb=mesh.skeleton.bones.findIndex(b=>V83.norm(b.name)==='Head');
-  const si=new Uint16Array(zs.length*4),sw=new Float32Array(zs.length*4);for(let k=0;k<zs.length;k++){si[k*4]=hb;sw[k*4]=1;}
+  const si=new Uint16Array(NV*4),sw=new Float32Array(NV*4);for(let k=0;k<NV;k++){si[k*4]=hb;sw[k*4]=1;}
   pg.setAttribute('skinIndex',new THREE.BufferAttribute(si,4));pg.setAttribute('skinWeight',new THREE.BufferAttribute(sw,4));
   // テクスチャ(開/閉)
   const cw=512,ch=Math.round(512*(y1-y0)/(x1-x0));

@@ -7846,7 +7846,7 @@ function animate(ts){
   // v11: 基本速度を走りに引き上げ(4.6→7.5/s)。倒し量に比例＝フル倒しで走り
   let curSpd=0;
   if(moving){
-    curSpd=(sprint?7.8:6.0)*Math.min(mag,1); // v83: 足が滑らない速さに(本物の走りモーションの歩幅に合わせて少しだけ減速)
+    curSpd=(sprint?9.8:7.5)*Math.min(mag,1);
     const ang=Math.atan2(ix,iz)+camYaw,sp=curSpd*dt;
     // v9: プレイヤー円(半径PLAYER_R)でX軸→Z軸を別々に解決＝壁沿いをなめらかにスライド。
     //     万一グリッドにめり込んでいる時は判定を免除して脱出だけ許す

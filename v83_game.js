@@ -9,7 +9,7 @@ const V83_KEYS={hero:1,atsushi:1,yusuke:1,naoto:1,ryunosuke:1,ami:1,yakuba:1,gin
 let V83_LIB=null;
 function v83Lib(){if(!V83_LIB)V83_LIB=loadGLB('c3/anim_lib.glb');return V83_LIB;}
 const V83_CFG={};
-function v83Cfg(k){if(!V83_CFG[k])V83_CFG[k]=fetch('c3/'+k+'.json').then(r=>r.json());return V83_CFG[k];}
+function v83Cfg(k){if(!V83_CFG[k])V83_CFG[k]=fetch('c3/'+k+'.json').then(r=>r.json()).then(j=>{if(/nopatch/.test(location.search))delete j.patch;return j;});return V83_CFG[k];}
 function v83Img(src){return new Promise((res,rej)=>{const im=new Image();im.onload=()=>res(im);im.onerror=rej;im.src=src;});}
 const V83_OUTLINES=[];
 async function v83LoadChar(key,height,onProg){
@@ -33,7 +33,7 @@ async function v83LoadChar(key,height,onProg){
   const acts={},mixer=new THREE.AnimationMixer(model);
   for(const c of lib.animations){
     const nm=c.name.toLowerCase();
-    const rc=V83.retarget(lib.scene,c,model,{name:nm,amp:nm==='run'?1.3:1});
+    const rc=V83.retarget(lib.scene,c,model,{name:nm,amp:nm==='run'?1.45:1});
     acts[nm]=mixer.clipAction(rc);
   }
   // 頭を1割大きく(スマホの小さい画面でも顔が読めるように)。リターゲットの後に
@@ -42,7 +42,7 @@ async function v83LoadChar(key,height,onProg){
   model.position.y=-y0;
   const inner=new THREE.Group();inner.add(model);inner.scale.setScalar(sc);
   const wrap=new THREE.Group();wrap.add(inner);
-  const rig={v83:true,key,mixer,acts,cur:'',scale:sc,eye,model,mesh,wrap,
+  const rig={v83:true,patch:V83.lastPatch,key,mixer,acts,cur:'',scale:sc,eye,model,mesh,wrap,
     speed:{walk:(acts.walk.getClip().userData.speed||1)*sc,run:(acts.run.getClip().userData.speed||2)*sc},work:0};
   acts.idle.play();rig.cur='idle';
   // 個体差: 待機の位相をずらす(全員が同じタイミングで呼吸しない)
@@ -56,7 +56,7 @@ function v83Play(rig,name,spd){
   if(name==='run'&&spd>0&&spd<rig.speed.walk*1.5)name='walk';
   const to=rig.acts[name];if(!to)return;
   if(name==='walk'||name==='run'){
-    to.timeScale=Math.max(0.55,Math.min(3.2,(spd||rig.speed[name])/rig.speed[name]));
+    to.timeScale=Math.max(0.55,Math.min(name==='run'?2.3:2.0,(spd||rig.speed[name])/rig.speed[name]));
   }
   if(rig.cur===name)return;
   if(rig.cur==='agree'&&name==='idle')return; // うなずき中は最後まで
@@ -86,8 +86,22 @@ function v83RotWorld(b,axisW,ang){
 }
 function v83Work(rig){if(rig&&rig.v83)rig.work=0.0001;}
 const _v83X=new THREE.Vector3(),_v83Z=new THREE.Vector3(),_v83wq=new THREE.Quaternion();
+// 画面外のキャラはアニメを止め、遠いキャラは間引いて更新(人数が増えても重くならない)
+const _v83F=new THREE.Frustum(),_v83M=new THREE.Matrix4(),_v83S=new THREE.Sphere(),_v83P=new THREE.Vector3();let _v83FF=-1;
 function v83Tick(rig,dt){
   if(!rig||!rig.v83)return;
+  rig.acc=(rig.acc||0)+dt;
+  if(typeof camera!=='undefined'&&camera&&rig.wrap&&rig!==playerRig){
+    const fr=renderer&&renderer.info?renderer.info.render.frame:0;
+    if(fr!==_v83FF){_v83FF=fr;_v83M.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);_v83F.setFromProjectionMatrix(_v83M);}
+    rig.wrap.getWorldPosition(_v83P);
+    _v83S.center.copy(_v83P);_v83S.center.y+=0.8;_v83S.radius=1.2;
+    if(!_v83F.intersectsSphere(_v83S)){rig.acc=Math.min(rig.acc,0.5);return;}
+    const d=_v83P.distanceTo(camera.position);
+    if(d>40&&rig.acc<1/12)return;
+    if(d>22&&rig.acc<1/24)return;
+  }
+  dt=Math.min(0.5,rig.acc);rig.acc=0;
   rig.mixer.update(dt);
   if(rig.eye)V83.tickBlink(rig.eye,dt);
   if(rig.work>0){
