@@ -6,14 +6,14 @@
 //  - まばたき・前髪ごしの目/眉・作業モーション・話しかけるとうなずく
 // =====================================================================
 const V83_KEYS={hero:1,atsushi:1,yusuke:1,naoto:1,ryunosuke:1,ami:1,yakuba:1,ginko:1,fudosan:1,shuriya:1,juui:1,nokyo:1,seriman:1,obaachan:1,ojiichan:1,shufu:1,kodomo:1};
-let V83_LIB=null;
-function v83Lib(){if(!V83_LIB)V83_LIB=loadGLB('c3/anim_lib.glb');return V83_LIB;}
+let V83_LIB=null;const V83_DIR=(typeof location!=='undefined'&&/[?&]c3dir=([\w]+)/.exec(location.search)||[0,'c3'])[1];
+function v83Lib(){if(!V83_LIB)V83_LIB=loadGLB(V83_DIR+'/anim_lib.glb');return V83_LIB;}
 const V83_CFG={};
-function v83Cfg(k){if(!V83_CFG[k])V83_CFG[k]=fetch('c3/'+k+'.json').then(r=>r.json()).then(j=>{if(/nopatch/.test(location.search))delete j.patch;return j;});return V83_CFG[k];}
+function v83Cfg(k){if(!V83_CFG[k])V83_CFG[k]=fetch(V83_DIR+'/'+k+'.json').then(r=>r.json()).then(j=>{if(/nopatch/.test(location.search))delete j.patch;return j;});return V83_CFG[k];}
 function v83Img(src){return new Promise((res,rej)=>{const im=new Image();im.onload=()=>res(im);im.onerror=rej;im.src=src;});}
 const V83_OUTLINES=[];
 async function v83LoadChar(key,height,onProg){
-  const [g,lib,cfg]=await Promise.all([loadGLB('c3/'+key+'.glb',onProg),v83Lib(),v83Cfg(key)]);
+  const [g,lib,cfg]=await Promise.all([loadGLB(V83_DIR+'/'+key+'.glb',onProg),v83Lib(),v83Cfg(key)]);
   const model=g.scene;let mesh=null;model.traverse(o=>{if(o.isSkinnedMesh)mesh=o;});
   if(!mesh)throw new Error('no skinned mesh '+key);
   V83.restPose(model);model.updateMatrixWorld(true);
@@ -27,7 +27,7 @@ async function v83LoadChar(key,height,onProg){
   mesh.castShadow=true;mesh.receiveShadow=false;mesh.frustumCulled=false;
   const ol=V83.addOutline(mesh);ol.visible=GFX.level>0;V83_OUTLINES.push(ol);
   let eye=null;
-  try{const im=await v83Img('c3/'+key+'_eye.webp');eye=V83.eyePatch(mesh,Object.assign({},cfg,{img:im,yaw:0,skin:cfg.skin||'#f8dcc4',lash:cfg.lash||'#3a2014'}));}catch(e){window.__v4dbg.errors.push('eye-'+key+':'+(e&&e.message||e));}
+  try{const im=await v83Img(V83_DIR+'/'+key+'_eye.webp');eye=V83.eyePatch(mesh,Object.assign({},cfg,{img:im,yaw:0,skin:cfg.skin||'#f8dcc4',lash:cfg.lash||'#3a2014'}));}catch(e){window.__v4dbg.errors.push('eye-'+key+':'+(e&&e.message||e));}
   if(eye){eye.material.toneMapped=false;eye.material.color.setScalar(0.9);}
   // モーションを焼く(モデル単体=縮尺1のうちに)
   const acts={},mixer=new THREE.AnimationMixer(model);
