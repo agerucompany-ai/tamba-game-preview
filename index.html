@@ -199,10 +199,23 @@
   #updBanner{position:fixed;left:50%;top:calc(10px + env(safe-area-inset-top));transform:translateX(-50%);z-index:90;display:none;align-items:center;gap:8px;background:#fff;border-radius:999px;padding:7px 8px 7px 14px;font-weight:800;font-size:13px;color:var(--ink);box-shadow:0 6px 20px rgba(0,0,0,.25);border:2px solid #ffc23e;}
   #updBanner button{font-weight:800;color:#fff;background:linear-gradient(#66a0f6,#3570d8);border:2px solid #fff;border-radius:999px;padding:5px 12px;font-size:13px;}
 .v83q{}
-  #quest{-webkit-line-clamp:4!important;max-width:min(78vw,520px)!important;}
-  #quest .qch{display:block;font-size:10.5px;color:#7a5a2a;font-weight:800;letter-spacing:.04em;}
-  #quest .qrow{display:flex;align-items:center;gap:5px;}
-  #quest .qup{display:block;font-size:10.5px;color:#6a7a5a;font-weight:700;}
+  /* v83c: 画面の上と左を小さく・半透明に(キャラと被らない) */
+  #quest{-webkit-line-clamp:1!important;display:block!important;max-width:min(74vw,460px)!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:3px 10px!important;font-size:12px!important;background:rgba(255,254,246,.78)!important;backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);border-width:1.5px!important;border-left-width:5px!important;}
+  #quest .qch{display:inline;font-size:10px;color:#7a5a2a;font-weight:800;margin-right:4px;background:#f4e6c6;border-radius:6px;padding:0 5px;}
+  #quest .qrow{display:inline;}
+  #quest .qrow b{font-weight:800;}
+  #quest .qup{display:none;}
+  #top .chip,#money,#day,#place{background:rgba(255,253,245,.82)!important;}
+  #zoomBtns{gap:6px!important;bottom:calc(84px + env(safe-area-inset-bottom))!important;}
+  .zbtn{width:36px!important;height:36px!important;font-size:15px!important;opacity:.72;border-width:2px!important;}
+  #zoomBtns:not(.open) #rotLBtn,#zoomBtns:not(.open) #rotRBtn,#zoomBtns:not(.open) #zoomOutBtn,#zoomBtns:not(.open) #zoomInBtn{display:none!important;}
+  #zoomBtns.open .zbtn{opacity:.92;}
+  #talkImg{width:84px!important;height:84px!important;margin-right:-16px!important;}
+  #talkBody{min-height:0!important;padding:8px 12px 8px 22px!important;}
+  #talkText{font-size:13px!important;line-height:1.5!important;}
+  #talk{max-width:500px!important;}
+  #pcGuide{left:auto!important;right:10px!important;transform:none!important;width:min(330px,40vw)!important;padding:8px 10px!important;top:calc(52px + env(safe-area-inset-top))!important;}
+  #pcGuide h3{font-size:13px!important;margin-bottom:4px!important;} #pcGuide .gl{font-size:11.5px!important;padding:1px!important;} #pcGuide .gk{min-width:92px!important;font-size:11px!important;} #pcGuideClose{margin-top:6px!important;padding:5px!important;font-size:12px!important;}
   #qArrow{display:inline-block;color:#e8901a;font-size:15px;line-height:1;transition:transform .15s;flex:0 0 auto;}
   #qDist{font-size:11px;color:#c06a10;font-weight:800;white-space:nowrap;}
   .v83pulse{animation:v83p 1.1s ease-in-out infinite;}
@@ -238,7 +251,7 @@
 <div id="joy"><div id="joyKnob"></div></div>
 <div id="actHint">🌱 種をまく</div>
 <button class="abtn" id="useBtn">使う<br>取る</button>
-<div id="zoomBtns"><div class="zbtn" id="gfxBtn" title="画質">⚙</div><div class="zbtn" id="rotLBtn" title="カメラを回す">⟲</div><div class="zbtn" id="rotRBtn" title="カメラを回す">⟳</div><div class="zbtn" id="zoomOutBtn">🔍−</div><div class="zbtn" id="zoomInBtn">🔍＋</div></div>
+<div id="zoomBtns"><div class="zbtn" id="gfxBtn" title="画質">⚙</div><div class="zbtn" id="camTgl" title="カメラ操作" onclick="this.parentNode.classList.toggle('open')">🎥</div><div class="zbtn" id="rotLBtn" title="カメラを回す">⟲</div><div class="zbtn" id="rotRBtn" title="カメラを回す">⟳</div><div class="zbtn" id="zoomOutBtn">🔍−</div><div class="zbtn" id="zoomInBtn">🔍＋</div></div>
 <div id="talk"><img id="talkImg" alt=""><div id="talkBody"><div id="talkName"></div><div id="talkText"></div></div></div>
 <div id="updBanner">🆕 新しいバージョンがあります<button id="updBtn">更新する</button></div>
 <div id="glbNote">3Dキャラ読み込み中…</div>
@@ -2422,8 +2435,8 @@ function genWorld(){
   flatten(34,40,30,37,2); // v83: 旧堆肥場の跡は草地に戻す
   for(let x=34;x<=40;x++)for(let z=30;z<=37;z++)gset(x,2,z,B.GRASS);
   // v83: 堆肥場を牛舎の南入口のすぐ南へ(フンを運ぶ導線が短い・大倉庫/出荷箱/畑と干渉しない) x17-26,z29-34
-  flatten(17,26,29,34,2);
-  for(let x=17;x<=26;x++)for(let z=29;z<=34;z++)gset(x,2,z,(x>=18&&x<=21&&z>=30&&z<=33)?B.SOIL:B.GRASS);
+  flatten(17,26,27,34,2); // v83: z27-28(牛舎の南入口前)も同じ高さに=くぼみを作らない
+  for(let x=17;x<=26;x++)for(let z=27;z<=34;z++)gset(x,2,z,(x>=18&&x<=21&&z>=30&&z<=33)?B.SOIL:B.GRASS);
   for(let x=19;x<=21;x++)for(let z=31;z<=32;z++)gset(x,3,z,B.COMPOST);
   // --- 野菜畑（南） ---
   flatten(26,33,36,42,2);
@@ -3652,7 +3665,7 @@ function rigPlay(rig,name,spd){
 }
 
 // ---------- プレイヤー（麦わら帽子の農家キッズ） ----------
-const HERO_H=1.5; // v83: 3.5頭身の設計図どおりの体型に合わせて少し大きく(顔が読める大きさ) // 子どもの身長（ブロック1〜2個分・牛/柵と釣り合う大きさ）
+const HERO_H=1.55; // v83: 3.5頭身の設計図どおりの体型に合わせて少し大きく(顔が読める大きさ) // 子どもの身長（ブロック1〜2個分・牛/柵と釣り合う大きさ）
 const player={x:27.5,y:4,z:32.5,vy:0,dir:0,onGround:true};
 window.__v4dbg.player=player; // 検証用参照
 let avatar=null;// 全体グループ

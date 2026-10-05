@@ -124,9 +124,9 @@ function v83UpdateQuest(){
   const el=document.getElementById('quest');
   if(el){
     if(q){const c=V83_CHAPTERS[q.ch-1];
-      el.innerHTML='<span class="qch">第'+c.n+'章 '+c.t+'</span><span class="qrow"><span id="qArrow">➤</span><b>'+q.s+'</b><span id="qDist"></span></span>';}
+      el.innerHTML='<span class="qch">'+c.n+'章</span><span class="qrow"><span id="qArrow">➤</span><b>'+q.s+'</b><span id="qDist"></span></span>';}
     else{const up=v83Upcoming();
-      el.innerHTML='<span class="qch">⏭ 季節を待とう</span><span class="qrow"><b>「次の週へ」で時間を進めよう</b></span>'+(up.length?'<span class="qup">次: '+up.map(u=>u.s).slice(0,2).join(' / ')+'</span>':'');}
+      el.innerHTML='<span class="qch">⏭</span><span class="qrow"><b>季節を待とう(「次の週へ」で進める)</b></span>'+(up.length?'<span class="qup">次: '+up.map(u=>u.s).slice(0,2).join(' / ')+'</span>':'');}
   }
 }
 function v83ShowQuestInfo(){
@@ -220,7 +220,27 @@ function v83Highlight(q){
   if(!cands.length&&q.hl.btn)cands=[...box.querySelectorAll('button')].filter(b=>q.hl.btn.test(b.textContent)&&b.offsetParent).slice(0,1);
   for(const b of cands){if(!b.classList.contains('v83hl')){b.classList.add('v83hl');if(!box.dataset.v83s){box.dataset.v83s=1;try{b.scrollIntoView({block:'center',behavior:'smooth'});}catch(e){}}}}
 }
+const _v83c=new THREE.Vector3(),_v83pp=new THREE.Vector3();let v83DeclT=0;
+function v83Declutter(){
+  if(!camera||!player)return;
+  _v83pp.set(player.x,player.y+0.9,player.z).project(camera);
+  for(const it of infoIcons){const sp=it.sp;if(!sp||!sp.isSprite)continue;
+    if(!sp.userData.v83s)sp.userData.v83s=sp.scale.x;
+    const d=sp.getWorldPosition(_v83c).distanceTo(camera.position);
+    const k=Math.max(0.34,Math.min(1,d/13));sp.scale.setScalar(sp.userData.v83s*k);
+    _v83c.project(camera);const sx=(_v83c.x-_v83pp.x)*innerWidth/2,sy=(_v83c.y-_v83pp.y)*innerHeight/2;
+    const over=Math.abs(sx)<70&&sy>-40&&sy<150&&d<camera.position.distanceTo(_v83pp.set(player.x,player.y,player.z))+1;
+    _v83pp.set(player.x,player.y+0.9,player.z).project(camera);
+    if(sp.material){sp.material.transparent=true;sp.material.opacity=over?0.28:1;}}
+  // 手前(カメラと主人公の間)にいるNPCは隠す=主人公や会話窓・ボタンと重ならない
+  const pd=camera.position.distanceTo(_v83c.set(player.x,player.y+0.9,player.z));
+  for(const n of npcs){if(!n.mesh.parent)continue;const d=n.mesh.position.distanceTo(camera.position);
+    let hide=d<2.6;
+    if(!hide&&d<pd-0.8){_v83c.copy(n.mesh.position);_v83c.y+=0.9;_v83c.project(camera);if(_v83c.y<_v83pp.y-0.05)hide=true;}
+    n.mesh.visible=!hide;}
+}
 function v83NavTick(dt){
+  v83DeclT+=dt;if(v83DeclT>0.1){v83DeclT=0;try{v83Declutter();}catch(e){}}
   if(!state||!state.qv)return;
   v83NavInit();if(!v83Nav)return;
   const N=v83Nav;N.t+=dt;
@@ -255,7 +275,7 @@ function v83NavTick(dt){
     const yy=walkY(Math.floor(x),Math.floor(z),(A[2]+B[2])/2+0.6);const y=(yy<=WH?yy:A[2])+0.07;
     const yaw=Math.atan2(B[0]-A[0],B[1]-A[1]);
     const fade=Math.min(1,(s-1.2)/1.2)*Math.min(1,(tot-1.0-s)/1.5);
-    N.e.set(0,yaw,0);N.q.setFromEuler(N.e);N.v.set(x,y,z);N.s.setScalar(1.0+0.6*Math.max(0,fade));
+    N.e.set(0,yaw,0);N.q.setFromEuler(N.e);N.v.set(x,y,z);N.s.setScalar((1.0+0.6*Math.max(0,fade))*Math.max(0,Math.min(1,(N.v.distanceTo(camera.position)-3.5)/2.5)));
     N.m.compose(N.v,N.q,N.s);N.crumbs.setMatrixAt(k,N.m);N.v.y-=0.01;N.m.compose(N.v,N.q,N.s);N.crumbsW.setMatrixAt(k,N.m);
   }
   N.crumbs.count=k;N.crumbs.instanceMatrix.needsUpdate=true;N.crumbsW.count=k;N.crumbsW.instanceMatrix.needsUpdate=true;
